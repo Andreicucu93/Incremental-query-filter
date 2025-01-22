@@ -1,20 +1,33 @@
 import tkinter as tk
 from tkinter import ttk
 import pyperclip
-import customtkinter as ctk
+
 
 class App:
     def __init__(self, root):
         self.root = root
-        self.root.title("Global swaps tool")
+        self.root.title("Editor for the Advanced Filter")
 
         self.drop_var = tk.StringVar()
-        self.drop_var.set("DBKEY")  # Default value
+        self.drop_var.set("ID")  # Default value
         self.processed_lines = 0
 
         self.format_strings = {
+            'UPC': "UPC in ({})",
+            'RETAILER STORE': "CAST([Desc2] As varchar(1000)) IN ({})",
             'DBKEY': "DBKey IN ({})",
+            'RESET TIMING AND RETAILER STORE': "CAST([Desc10] As varchar(1000)) = N'{}' AND CAST([Desc2] As varchar(1000)) IN ({})",
+            'STATE': "CAST([Desc5] As varchar(1000)) IN ({})",
+            'TDLINX': "CAST([Desc21] As varchar(1000)) IN ({})",
+            'ID': "ID in ({})",
+            'MC RPL UPC': "Desc20 in ({})"
         }
+
+        self.year_var = tk.StringVar()
+        self.year_var.set("2022")  # Default year
+
+        self.season_var = tk.StringVar()
+        self.season_var.set("SPRING")  # Default season
 
         self.current_position = 0  # Track current position for chunked copying
 
@@ -43,6 +56,14 @@ class App:
         self.drop.grid(column=0, row=0, padx=10, pady=5, sticky="w")
         self.drop.bind("<<ComboboxSelected>>", self.update_ui)
 
+        self.year_drop = ttk.Combobox(self.root, textvariable=self.year_var, state='disabled', width=50)
+        self.year_drop['values'] = list(range(2000, 2031))  # Years from 2000 to 2030
+        self.year_drop.grid(column=0, row=1, padx=10, pady=5, sticky="w")
+
+        self.season_drop = ttk.Combobox(self.root, textvariable=self.season_var, state='disabled', width=50)
+        self.season_drop['values'] = ('SPRING', 'SUMMER', 'FALL', 'WINTER')  # Added 'WINTER' for completeness
+        self.season_drop.grid(column=0, row=2, padx=10, pady=5, sticky="w")
+
         self.text_frame = tk.Frame(self.root)
         self.text_frame.grid(column=1, row=0, rowspan=4, padx=10, pady=5, sticky="nsew")
 
@@ -54,11 +75,11 @@ class App:
 
         self.text.config(yscrollcommand=self.scrollbar.set)
 
-        self.clear_button = ctk.CTkButton(self.root, text="Clear", command=self.clear_text, width=30)
+        self.clear_button = tk.Button(self.root, text="Clear", command=self.clear_text, width=30)
         self.clear_button.grid(column=0, row=4, columnspan=2, padx=10, pady=5)
 
         # New button for chunked copying
-        self.chunk_copy_button = ctk.CTkButton(self.root, text="Progressive clipboard (batch)", command=self.copy_next_chunk, width=30)
+        self.chunk_copy_button = tk.Button(self.root, text="Progressive clipboard (batch)", command=self.copy_next_chunk, width=30)
         self.chunk_copy_button.grid(column=0, row=5, columnspan=2, padx=10, pady=5)
 
     def update_ui(self, event):
@@ -149,6 +170,6 @@ class App:
 
 
 if __name__ == "__main__":
-    root = ctk.CTk()
+    root = tk.Tk()
     app = App(root)
     root.mainloop()
