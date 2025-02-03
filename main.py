@@ -72,7 +72,9 @@ def generate_query():
     for item in wip:
         if item not in completed:
             temp_set = new_set + [item]
-            temp_query = f"{attribute_selected} in ({', '.join([f'\"{num}\"' for num in temp_set])})"
+            temp_query = "{} in ({})".format(attribute_selected, ", ".join(['"{}"'.format(num) for num in temp_set]))
+
+
 
             if len(temp_query) > limit:
                 break
@@ -83,7 +85,8 @@ def generate_query():
         save_input_data()
         generate_query()
         return
-    query = f"{attribute_selected} in ({', '.join([f'\"{num}\"' for num in new_set])})"
+    query = "{} in ({})".format(attribute_selected, ", ".join(['"{}"'.format(num) for num in new_set]))
+
     print(f"Query: {query}")
 
     preview_box.config(state='normal', bg='DarkOliveGreen2')
