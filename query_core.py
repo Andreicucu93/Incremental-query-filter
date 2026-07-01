@@ -34,3 +34,20 @@ def pack_batch(pending, attribute, limit):
         batch.append(item)
         cur += add
     return batch
+
+
+def pending_records(all_records, done):
+    done_set = set(done)                     # membership only; order comes from all_records
+    return [x for x in all_records if x not in done_set]
+
+
+def count_batches(pending, attribute, limit):
+    remaining = list(pending)
+    n = 0
+    while remaining:
+        b = pack_batch(remaining, attribute, limit)
+        if not b:
+            return None                      # a single ID can't fit — cannot complete
+        n += 1
+        remaining = remaining[len(b):]
+    return n
