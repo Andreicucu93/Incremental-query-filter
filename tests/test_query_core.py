@@ -11,3 +11,25 @@ def test_build_query_two_values_single_quotes_no_spaces():
 
 def test_build_query_single_value():
     assert qc.build_query("DBKEY", ["1840833"]) == "DBKEY in ('1840833')"
+
+
+def test_query_length_matches_build_query():
+    ids = [str(i) for i in range(1000, 1123)]
+    assert qc.query_length("DBKEY", ids) == len(qc.build_query("DBKEY", ids))
+
+
+def test_query_length_empty():
+    assert qc.query_length("DBKEY", []) == len("DBKEY in ()")
+
+
+def test_pack_batch_fills_up_to_limit_in_order():
+    pending = ["11", "22", "33", "44"]
+    batch = qc.pack_batch(pending, "A", 20)
+    assert batch == pending[:len(batch)]                     # order preserved, prefix only
+    assert qc.query_length("A", batch) <= 20
+    if len(batch) < len(pending):
+        assert qc.query_length("A", pending[:len(batch) + 1]) > 20  # one more would overflow
+
+
+def test_pack_batch_single_id_too_big_returns_empty():
+    assert qc.pack_batch(["1840833"], "DBKEY", 10) == []
