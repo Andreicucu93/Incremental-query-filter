@@ -24,7 +24,6 @@ class App(ctk.CTk):
         self.title("Incremental query filter")
         self.geometry("700x740")
         self.minsize(640, 680)
-        self.locked = False
         self._build_ui()
         self._load_state()
 
@@ -67,13 +66,16 @@ class App(ctk.CTk):
         actions.grid(row=2, column=0, padx=12, pady=6, sticky="ew")
         for c in range(3):
             actions.grid_columnconfigure(c, weight=1)
-        ctk.CTkButton(actions, text="Load list", height=38, command=self.load_list).grid(
-            row=0, column=0, padx=4, sticky="ew")
+        self.load_btn = ctk.CTkButton(actions, text="Load list", height=38, command=self.load_list)
+        self.load_btn.grid(row=0, column=0, padx=4, sticky="ew")
+        self._load_fg = self.load_btn.cget("fg_color")
         self.next_btn = ctk.CTkButton(actions, text="▶ Next query", height=38,
                                       font=ctk.CTkFont(size=14, weight="bold"), command=self.next_batch)
         self.next_btn.grid(row=0, column=1, padx=4, sticky="ew")
-        ctk.CTkButton(actions, text="Clear", height=38, fg_color="firebrick1",
-                      hover_color="brown1", command=self.clear_all).grid(row=0, column=2, padx=4, sticky="ew")
+        self.clear_btn = ctk.CTkButton(actions, text="Clear", height=38, fg_color="firebrick1",
+                                       hover_color="brown1", command=self.clear_all)
+        self.clear_btn.grid(row=0, column=2, padx=4, sticky="ew")
+        self._clear_fg = self.clear_btn.cget("fg_color")
 
         # --- Paste column + Current query, side by side ---
         pq = ctk.CTkFrame(self, fg_color="transparent")
@@ -103,15 +105,13 @@ class App(ctk.CTk):
         self.swap_out_entry.grid(row=0, column=1, padx=6, pady=(10, 4), sticky="ew")
         ctk.CTkButton(swap, text="Copy", width=64,
                       command=lambda: self._copy_field(self.swap_out_entry, "Swap OUT")).grid(
-            row=0, column=2, padx=6, pady=(10, 4))
+            row=0, column=2, padx=(6, 12), pady=(10, 4))
         ctk.CTkLabel(swap, text="Swap IN", width=64).grid(row=1, column=0, padx=(12, 6), pady=(4, 10), sticky="w")
         self.swap_in_entry = ctk.CTkEntry(swap)
         self.swap_in_entry.grid(row=1, column=1, padx=6, pady=(4, 10), sticky="ew")
         ctk.CTkButton(swap, text="Copy", width=64,
                       command=lambda: self._copy_field(self.swap_in_entry, "Swap IN")).grid(
-            row=1, column=2, padx=6, pady=(4, 10))
-        self.lock_btn = ctk.CTkButton(swap, text="LOCK", width=88, command=self._toggle_lock)
-        self.lock_btn.grid(row=0, column=3, rowspan=2, padx=(6, 12), pady=10, sticky="ns")
+            row=1, column=2, padx=(6, 12), pady=(4, 10))
 
         # --- Footer: stay-on-top + transparency ---
         footer = ctk.CTkFrame(self, fg_color="transparent")
@@ -142,12 +142,14 @@ class App(ctk.CTk):
     def _set_alpha(self, value):
         self.attributes("-alpha", float(value))
 
-    def _toggle_lock(self):
-        self.locked = not self.locked
-        state = "disabled" if self.locked else "normal"
-        self.swap_in_entry.configure(state=state)
-        self.swap_out_entry.configure(state=state)
-        self.lock_btn.configure(text="Unlock" if self.locked else "LOCK")
+    def _flash_ok(self, button, base_text, base_fg, done_text):
+        """Small green confirmation pulse, then revert — replaces the old dialogs."""
+        g1, g2 = "#2FA572", "#3CD08F"
+        button.configure(text=done_text, fg_color=g1)
+        self.after(150, lambda: button.configure(fg_color=g2))
+        self.after(300, lambda: button.configure(fg_color=g1))
+        self.after(450, lambda: button.configure(fg_color=g2))
+        self.after(750, lambda: button.configure(text=base_text, fg_color=base_fg))
 
     def _copy_field(self, entry, label):
         value = entry.get().strip()
@@ -199,16 +201,13 @@ class App(ctk.CTk):
     def load_list(self):
         items = qc.dedup_preserve_order(self.paste_box.get("1.0", "end-1c").splitlines())
         if not items:
-            messagebox.showinfo("Nothing to load", "Paste a column of IDs first.")
+            self.status_lbl.configure(text="Paste a column of IDs first.")
             return
-        if storage.read_lines(EXECUTED):
-            if not messagebox.askyesno(
-                    "Start fresh?", "Loading a new list resets all progress. Continue?"):
-                return
         storage.write_lines(ALL_RECORDS, items)
         storage.clear_file(EXECUTED)
         self.status_lbl.configure(text=f"Loaded {len(items)} records.")
         self.refresh()
+        self._flash_ok(self.load_btn, "Load list", self._load_fg, "✓ Loaded")
 
     def next_batch(self):
         validated = self._validate()
@@ -238,15 +237,13 @@ class App(ctk.CTk):
         self.refresh()
 
     def clear_all(self):
-        if not messagebox.askyesno(
-                "Clear everything?", "This wipes the loaded list AND all progress. Continue?"):
-            return
         storage.clear_file(ALL_RECORDS)
         storage.clear_file(EXECUTED)
         self.paste_box.delete("1.0", "end")
         self._set_box(self.query_box, [])
         self.status_lbl.configure(text="")
         self.refresh()
+        self._flash_ok(self.clear_btn, "Clear", self._clear_fg, "✓ Cleared")
 
     def _load_state(self):
         s = storage.load_settings(SETTINGS)
