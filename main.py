@@ -111,21 +111,109 @@ class App(ctk.CTk):
     def _set_alpha(self, value):
         self.attributes("-alpha", float(value))
 
-    # ---------- callbacks (stubs — implemented in Task 7) ----------
-    def load_list(self):
-        print("load_list stub")
-
-    def next_batch(self):
-        print("next_batch stub")
-
-    def clear_all(self):
-        print("clear_all stub")
+    # ---------- logic ----------
+    def _validate(self):
+        attribute = self.attr_entry.get().strip()
+        limit_raw = self.limit_entry.get().strip()
+        if not attribute:
+            messagebox.showinfo("Missing attribute", "Please enter a query attribute.")
+            return None
+        if not limit_raw.isdigit() or int(limit_raw) <= 0:
+            messagebox.showinfo("Bad limit", "Char limit must be a positive whole number.")
+            return None
+        return attribute, int(limit_raw)
 
     def refresh(self):
-        print("refresh stub")
+        all_records = qc.dedup_preserve_order(storage.read_lines(ALL_RECORDS))
+        done = storage.read_lines(EXECUTED)
+        pending = qc.pending_records(all_records, done)
+        self._set_box(self.pending_box, pending)
+        self._set_box(self.done_box, [x for x in all_records if x not in set(pending)])
+
+        total = len(all_records)
+        done_n = total - len(pending)
+        frac = (done_n / total) if total else 0
+        self.progress.set(frac)
+        self.percent_lbl.configure(text=f"{round(frac * 100)}%")
+        self.totals_lbl.configure(
+            text=f"Total {total}  ·  Done {done_n}  ·  Remaining {len(pending)}")
+
+        attribute = self.attr_entry.get().strip()
+        limit_raw = self.limit_entry.get().strip()
+        if pending and attribute and limit_raw.isdigit() and int(limit_raw) > 0:
+            n = qc.count_batches(pending, attribute, int(limit_raw))
+            txt = "▶  Batches remaining:  —  (limit too small)" if n is None \
+                else f"▶  Batches remaining:  {n}"
+        elif not pending and total:
+            txt = "✅  All done"
+        else:
+            txt = "▶  Batches remaining:  —"
+        self.batches_lbl.configure(text=txt)
+
+        self.next_btn.configure(state="disabled" if not pending else "normal")
+
+    def load_list(self):
+        items = qc.dedup_preserve_order(self.paste_box.get("1.0", "end-1c").splitlines())
+        if not items:
+            messagebox.showinfo("Nothing to load", "Paste a column of IDs first.")
+            return
+        if storage.read_lines(EXECUTED):
+            if not messagebox.askyesno(
+                    "Start fresh?", "Loading a new list resets all progress. Continue?"):
+                return
+        storage.write_lines(ALL_RECORDS, items)
+        storage.clear_file(EXECUTED)
+        self.next_btn.configure(text="▶ Next batch")
+        self.status_lbl.configure(text=f"Loaded {len(items)} records.")
+        self.refresh()
+
+    def next_batch(self):
+        validated = self._validate()
+        if not validated:
+            return
+        attribute, limit = validated
+        storage.save_settings(SETTINGS, {"attribute": attribute, "limit": limit})
+
+        all_records = qc.dedup_preserve_order(storage.read_lines(ALL_RECORDS))
+        pending = qc.pending_records(all_records, storage.read_lines(EXECUTED))
+        if not pending:
+            self.status_lbl.configure(text="✅ All done — nothing left to query.")
+            self.refresh()
+            return
+        batch = qc.pack_batch(pending, attribute, limit)
+        if not batch:
+            messagebox.showinfo(
+                "Limit too small", "A single ID won't fit in the character limit. Raise the limit.")
+            return
+        query = qc.build_query(attribute, batch)
+        pyperclip.copy(query)
+        storage.append_lines(EXECUTED, batch)
+        self._set_box(self.query_box, [query])
+        used = qc.query_length(attribute, batch)
+        self.status_lbl.configure(
+            text=f"Copied {len(batch)} IDs ✓  ·  {used} / {limit} chars used")
+        self.next_btn.configure(text="▶ Next Query")
+        self.refresh()
+
+    def clear_all(self):
+        if not messagebox.askyesno(
+                "Clear everything?", "This wipes the loaded list AND all progress. Continue?"):
+            return
+        storage.clear_file(ALL_RECORDS)
+        storage.clear_file(EXECUTED)
+        self.paste_box.delete("1.0", "end")
+        self._set_box(self.query_box, [])
+        self.status_lbl.configure(text="")
+        self.next_btn.configure(text="▶ Next batch")
+        self.refresh()
 
     def _load_state(self):
-        print("_load_state stub")
+        s = storage.load_settings(SETTINGS)
+        if s.get("attribute"):
+            self.attr_entry.insert(0, s["attribute"])
+        if s.get("limit"):
+            self.limit_entry.insert(0, str(s["limit"]))
+        self.refresh()
 
 
 if __name__ == "__main__":
