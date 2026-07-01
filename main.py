@@ -12,6 +12,9 @@ ALL_RECORDS = "all_records.txt"
 EXECUTED = "executed_records.txt"
 SETTINGS = "settings.json"
 
+DEFAULT_ATTRIBUTE = "DBKEY"
+DEFAULT_LIMIT = 1024
+
 ctk.set_appearance_mode("dark")
 
 
@@ -19,97 +22,139 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Incremental query filter")
-        self.geometry("920x660")
+        self.geometry("480x820")
+        self.minsize(460, 700)
+        self.locked = False
         self._build_ui()
         self._load_state()
 
     # ---------- UI construction ----------
     def _build_ui(self):
         self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(6, weight=1)   # current-query box expands with height
 
+        # --- Attribute + char limit ---
         top = ctk.CTkFrame(self)
-        top.grid(row=0, column=0, padx=16, pady=(16, 8), sticky="ew")
-        ctk.CTkLabel(top, text="Attribute:").grid(row=0, column=0, padx=(12, 4), pady=10)
-        self.attr_entry = ctk.CTkEntry(top, width=180)
-        self.attr_entry.grid(row=0, column=1, padx=(0, 20), pady=10)
-        ctk.CTkLabel(top, text="Char limit:").grid(row=0, column=2, padx=(0, 4), pady=10)
-        self.limit_entry = ctk.CTkEntry(top, width=100)
-        self.limit_entry.grid(row=0, column=3, padx=(0, 12), pady=10)
+        top.grid(row=0, column=0, padx=12, pady=(12, 6), sticky="ew")
+        top.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(top, text="Attribute:").grid(row=0, column=0, padx=(12, 6), pady=(10, 4), sticky="w")
+        self.attr_entry = ctk.CTkEntry(top)
+        self.attr_entry.grid(row=0, column=1, padx=(0, 12), pady=(10, 4), sticky="ew")
+        ctk.CTkLabel(top, text="Char limit:").grid(row=1, column=0, padx=(12, 6), pady=(4, 10), sticky="w")
+        self.limit_entry = ctk.CTkEntry(top)
+        self.limit_entry.grid(row=1, column=1, padx=(0, 12), pady=(4, 10), sticky="ew")
 
+        # --- Overall progress card ---
         card = ctk.CTkFrame(self)
-        card.grid(row=1, column=0, padx=16, pady=8, sticky="ew")
+        card.grid(row=1, column=0, padx=12, pady=6, sticky="ew")
         card.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(card, text="OVERALL PROGRESS", anchor="w",
                      font=ctk.CTkFont(size=13, weight="bold")).grid(
-            row=0, column=0, sticky="w", padx=12, pady=(10, 2))
+            row=0, column=0, columnspan=2, sticky="w", padx=12, pady=(10, 2))
         self.progress = ctk.CTkProgressBar(card)
         self.progress.grid(row=1, column=0, sticky="ew", padx=12, pady=4)
         self.progress.set(0)
-        self.percent_lbl = ctk.CTkLabel(card, text="0%")
-        self.percent_lbl.grid(row=1, column=1, padx=12)
+        self.percent_lbl = ctk.CTkLabel(card, text="0%", width=44)
+        self.percent_lbl.grid(row=1, column=1, padx=(6, 12))
         self.totals_lbl = ctk.CTkLabel(card, text="Total 0  ·  Done 0  ·  Remaining 0", anchor="w")
-        self.totals_lbl.grid(row=2, column=0, sticky="w", padx=12, pady=(2, 2))
+        self.totals_lbl.grid(row=2, column=0, columnspan=2, sticky="w", padx=12, pady=(2, 2))
         self.batches_lbl = ctk.CTkLabel(card, text="▶  Batches remaining:  0",
                                         font=ctk.CTkFont(size=15, weight="bold"), anchor="w")
-        self.batches_lbl.grid(row=3, column=0, sticky="w", padx=12, pady=(2, 10))
+        self.batches_lbl.grid(row=3, column=0, columnspan=2, sticky="w", padx=12, pady=(2, 10))
 
-        panels = ctk.CTkFrame(self)
-        panels.grid(row=2, column=0, padx=16, pady=8, sticky="nsew")
-        self.grid_rowconfigure(2, weight=1)
+        # --- Action row: Load list / Next query / Clear ---
+        actions = ctk.CTkFrame(self, fg_color="transparent")
+        actions.grid(row=2, column=0, padx=12, pady=6, sticky="ew")
         for c in range(3):
-            panels.grid_columnconfigure(c, weight=1)
-        panels.grid_rowconfigure(1, weight=1)
+            actions.grid_columnconfigure(c, weight=1)
+        ctk.CTkButton(actions, text="Load list", height=38, command=self.load_list).grid(
+            row=0, column=0, padx=4, sticky="ew")
+        self.next_btn = ctk.CTkButton(actions, text="▶ Next query", height=38,
+                                      font=ctk.CTkFont(size=14, weight="bold"), command=self.next_batch)
+        self.next_btn.grid(row=0, column=1, padx=4, sticky="ew")
+        ctk.CTkButton(actions, text="Clear", height=38, fg_color="firebrick1",
+                      hover_color="brown1", command=self.clear_all).grid(row=0, column=2, padx=4, sticky="ew")
 
-        ctk.CTkLabel(panels, text="PASTE COLUMN").grid(row=0, column=0, pady=(8, 2))
-        self.paste_box = ctk.CTkTextbox(panels, width=240)
-        self.paste_box.grid(row=1, column=0, padx=8, sticky="nsew")
-        ctk.CTkButton(panels, text="Load list", command=self.load_list).grid(row=2, column=0, pady=8)
+        # --- Paste column ---
+        ctk.CTkLabel(self, text="PASTE COLUMN", anchor="w",
+                     font=ctk.CTkFont(size=12, weight="bold")).grid(
+            row=3, column=0, sticky="w", padx=16, pady=(6, 0))
+        self.paste_box = ctk.CTkTextbox(self, height=110)
+        self.paste_box.grid(row=4, column=0, sticky="ew", padx=12, pady=(2, 6))
 
-        ctk.CTkLabel(panels, text="PENDING (in order)").grid(row=0, column=1, pady=(8, 2))
-        self.pending_box = ctk.CTkTextbox(panels, width=240)
-        self.pending_box.grid(row=1, column=1, padx=8, sticky="nsew")
+        # --- Current query (with inline status) ---
+        qhead = ctk.CTkFrame(self, fg_color="transparent")
+        qhead.grid(row=5, column=0, sticky="ew", padx=16, pady=(6, 0))
+        qhead.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(qhead, text="CURRENT QUERY", anchor="w",
+                     font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, sticky="w")
+        self.status_lbl = ctk.CTkLabel(qhead, text="", anchor="e")
+        self.status_lbl.grid(row=0, column=1, sticky="e")
+        self.query_box = ctk.CTkTextbox(self, height=150)
+        self.query_box.grid(row=6, column=0, sticky="nsew", padx=12, pady=(2, 6))
 
-        ctk.CTkLabel(panels, text="DONE").grid(row=0, column=2, pady=(8, 2))
-        self.done_box = ctk.CTkTextbox(panels, width=240)
-        self.done_box.grid(row=1, column=2, padx=8, sticky="nsew")
+        # --- Swap IN / Swap OUT scratch fields with LOCK ---
+        swap = ctk.CTkFrame(self)
+        swap.grid(row=7, column=0, sticky="ew", padx=12, pady=6)
+        swap.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(swap, text="Swap IN", width=64).grid(row=0, column=0, padx=(12, 6), pady=(10, 4), sticky="w")
+        self.swap_in_entry = ctk.CTkEntry(swap)
+        self.swap_in_entry.grid(row=0, column=1, padx=6, pady=(10, 4), sticky="ew")
+        ctk.CTkButton(swap, text="Copy", width=64,
+                      command=lambda: self._copy_field(self.swap_in_entry, "Swap IN")).grid(
+            row=0, column=2, padx=(6, 12), pady=(10, 4))
+        ctk.CTkLabel(swap, text="Swap OUT", width=64).grid(row=1, column=0, padx=(12, 6), pady=4, sticky="w")
+        self.swap_out_entry = ctk.CTkEntry(swap)
+        self.swap_out_entry.grid(row=1, column=1, padx=6, pady=4, sticky="ew")
+        ctk.CTkButton(swap, text="Copy", width=64,
+                      command=lambda: self._copy_field(self.swap_out_entry, "Swap OUT")).grid(
+            row=1, column=2, padx=(6, 12), pady=4)
+        self.lock_btn = ctk.CTkButton(swap, text="LOCK", command=self._toggle_lock)
+        self.lock_btn.grid(row=2, column=0, columnspan=3, padx=12, pady=(4, 10), sticky="ew")
 
-        actions = ctk.CTkFrame(self)
-        actions.grid(row=3, column=0, padx=16, pady=8, sticky="ew")
-        self.next_btn = ctk.CTkButton(actions, text="▶ Next batch", command=self.next_batch,
-                                      height=40, font=ctk.CTkFont(size=15, weight="bold"))
-        self.next_btn.grid(row=0, column=0, padx=12, pady=10)
-        ctk.CTkButton(actions, text="Clear", command=self.clear_all,
-                      fg_color="firebrick1", hover_color="brown1").grid(row=0, column=1, padx=12, pady=10)
-
-        bottom = ctk.CTkFrame(self)
-        bottom.grid(row=4, column=0, padx=16, pady=(8, 16), sticky="ew")
-        bottom.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(bottom, text="Current query", anchor="w").grid(
-            row=0, column=0, sticky="w", padx=12, pady=(8, 2))
-        self.query_box = ctk.CTkTextbox(bottom, height=70)
-        self.query_box.grid(row=1, column=0, columnspan=2, padx=12, sticky="ew")
-        self.status_lbl = ctk.CTkLabel(bottom, text="", anchor="w")
-        self.status_lbl.grid(row=2, column=0, sticky="w", padx=12, pady=(4, 8))
-
+        # --- Footer: stay-on-top + transparency ---
+        footer = ctk.CTkFrame(self, fg_color="transparent")
+        footer.grid(row=8, column=0, sticky="ew", padx=12, pady=(4, 12))
+        footer.grid_columnconfigure(0, weight=1)
+        footer.grid_columnconfigure(1, weight=1)
         self.ontop_var = tk.BooleanVar(value=False)
-        ctk.CTkCheckBox(bottom, text="Stay on top", variable=self.ontop_var,
-                        command=self._toggle_ontop).grid(row=2, column=1, sticky="e", padx=12)
-        self.alpha = ctk.CTkSlider(bottom, from_=0.3, to=1.0, command=self._set_alpha)
+        ctk.CTkCheckBox(footer, text="Stay on top", variable=self.ontop_var,
+                        command=self._toggle_ontop).grid(row=0, column=0, sticky="w", padx=4)
+        tframe = ctk.CTkFrame(footer, fg_color="transparent")
+        tframe.grid(row=0, column=1, sticky="e", padx=4)
+        ctk.CTkLabel(tframe, text="Transparency").grid(row=0, column=0, padx=(0, 6))
+        self.alpha = ctk.CTkSlider(tframe, from_=0.3, to=1.0, number_of_steps=70,
+                                   width=120, command=self._set_alpha)
         self.alpha.set(1.0)
-        self.alpha.grid(row=3, column=1, sticky="e", padx=12, pady=(0, 8))
+        self.alpha.grid(row=0, column=1)
 
     # ---------- helpers ----------
     def _set_box(self, box, lines):
         box.configure(state="normal")
         box.delete("1.0", "end")
         box.insert("1.0", "\n".join(lines))
-        box.configure(state="disabled")   # pending/done/query are read-only
+        box.configure(state="disabled")   # current-query box is read-only
 
     def _toggle_ontop(self):
         self.attributes("-topmost", self.ontop_var.get())
 
     def _set_alpha(self, value):
         self.attributes("-alpha", float(value))
+
+    def _toggle_lock(self):
+        self.locked = not self.locked
+        state = "disabled" if self.locked else "normal"
+        self.swap_in_entry.configure(state=state)
+        self.swap_out_entry.configure(state=state)
+        self.lock_btn.configure(text="Unlock" if self.locked else "LOCK")
+
+    def _copy_field(self, entry, label):
+        value = entry.get().strip()
+        if not value:
+            self.status_lbl.configure(text=f"{label} is empty")
+            return
+        pyperclip.copy(value)
+        self.status_lbl.configure(text=f"Copied {label}: {value} ✓")
 
     # ---------- logic ----------
     def _validate(self):
@@ -127,9 +172,6 @@ class App(ctk.CTk):
         all_records = qc.dedup_preserve_order(storage.read_lines(ALL_RECORDS))
         done = storage.read_lines(EXECUTED)
         pending = qc.pending_records(all_records, done)
-        self._set_box(self.pending_box, pending)
-        pending_set = set(pending)
-        self._set_box(self.done_box, [x for x in all_records if x not in pending_set])
 
         total = len(all_records)
         done_n = total - len(pending)
@@ -164,7 +206,6 @@ class App(ctk.CTk):
                 return
         storage.write_lines(ALL_RECORDS, items)
         storage.clear_file(EXECUTED)
-        self.next_btn.configure(text="▶ Next batch")
         self.status_lbl.configure(text=f"Loaded {len(items)} records.")
         self.refresh()
 
@@ -193,7 +234,6 @@ class App(ctk.CTk):
         used = qc.query_length(attribute, batch)
         self.status_lbl.configure(
             text=f"Copied {len(batch)} IDs ✓  ·  {used} / {limit} chars used")
-        self.next_btn.configure(text="▶ Next Query")
         self.refresh()
 
     def clear_all(self):
@@ -205,15 +245,12 @@ class App(ctk.CTk):
         self.paste_box.delete("1.0", "end")
         self._set_box(self.query_box, [])
         self.status_lbl.configure(text="")
-        self.next_btn.configure(text="▶ Next batch")
         self.refresh()
 
     def _load_state(self):
         s = storage.load_settings(SETTINGS)
-        if s.get("attribute"):
-            self.attr_entry.insert(0, s["attribute"])
-        if s.get("limit"):
-            self.limit_entry.insert(0, str(s["limit"]))
+        self.attr_entry.insert(0, s.get("attribute") or DEFAULT_ATTRIBUTE)
+        self.limit_entry.insert(0, str(s.get("limit") or DEFAULT_LIMIT))
         self.refresh()
 
 
