@@ -188,7 +188,7 @@ class App(ctk.CTk):
             txt = "▶  Batches remaining:  —  (limit too small)" if n is None \
                 else f"▶  Batches remaining:  {n}"
         elif not pending and total:
-            txt = "✅  All done"
+            txt = "▶  Batches remaining:  0"
         else:
             txt = "▶  Batches remaining:  —"
         self.batches_lbl.configure(text=txt)
@@ -216,7 +216,7 @@ class App(ctk.CTk):
         all_records = qc.dedup_preserve_order(storage.read_lines(ALL_RECORDS))
         pending = qc.pending_records(all_records, storage.read_lines(EXECUTED))
         if not pending:
-            self.status_lbl.configure(text="✅ All done — nothing left to query.")
+            self.status_lbl.configure(text="Nothing left to query.")
             self.refresh()
             return
         batch = qc.pack_batch(pending, attribute, limit)
