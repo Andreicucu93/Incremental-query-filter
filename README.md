@@ -6,12 +6,12 @@ A lightweight **Python desktop tool** (Tkinter + CustomTkinter) that helps build
 It respects a user-defined character limit (useful for database filter constraints) and copies each generated query to your clipboard.
 
 ## 🔹 Features
-- Paste a column of data (IDs, DB keys, etc.).
-- Generate progressive queries under a **custom character limit**.
-- Track already executed vs. pending records.
-- Auto-copy query to clipboard via `pyperclip`.
-- UI tweaks: transparency, stay-on-top, clear/reset.
-- Saves progress between runs (`all_records.txt`, `executed_records.txt`).
+- Paste a column of data (IDs, DB keys, etc.) — order is preserved exactly.
+- Generate progressive `IN (...)` queries under a **custom character limit**, e.g. `DBKEY in ('1840833','1706494')` (single-quoted, no spaces).
+- Live progress: total / done / remaining, a progress bar, and a **batches-remaining** count.
+- One click copies the current batch to the clipboard (`pyperclip`).
+- Explicit **Load list** (fresh job) and confirmed **Clear**; progress auto-saved between runs.
+- UI tweaks: transparency, stay-on-top.
 
 ## 🚦 Status
 ✅ Fully functional and maintained.
