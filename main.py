@@ -118,7 +118,7 @@ class App(ctk.CTk):
         if not attribute:
             messagebox.showinfo("Missing attribute", "Please enter a query attribute.")
             return None
-        if not limit_raw.isdigit() or int(limit_raw) <= 0:
+        if not limit_raw.isdecimal() or int(limit_raw) <= 0:
             messagebox.showinfo("Bad limit", "Char limit must be a positive whole number.")
             return None
         return attribute, int(limit_raw)
@@ -128,7 +128,8 @@ class App(ctk.CTk):
         done = storage.read_lines(EXECUTED)
         pending = qc.pending_records(all_records, done)
         self._set_box(self.pending_box, pending)
-        self._set_box(self.done_box, [x for x in all_records if x not in set(pending)])
+        pending_set = set(pending)
+        self._set_box(self.done_box, [x for x in all_records if x not in pending_set])
 
         total = len(all_records)
         done_n = total - len(pending)
@@ -140,7 +141,7 @@ class App(ctk.CTk):
 
         attribute = self.attr_entry.get().strip()
         limit_raw = self.limit_entry.get().strip()
-        if pending and attribute and limit_raw.isdigit() and int(limit_raw) > 0:
+        if pending and attribute and limit_raw.isdecimal() and int(limit_raw) > 0:
             n = qc.count_batches(pending, attribute, int(limit_raw))
             txt = "▶  Batches remaining:  —  (limit too small)" if n is None \
                 else f"▶  Batches remaining:  {n}"
