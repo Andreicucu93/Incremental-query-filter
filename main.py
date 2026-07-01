@@ -22,8 +22,8 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Incremental query filter")
-        self.geometry("700x740")
-        self.minsize(640, 680)
+        self.geometry("660x600")
+        self.minsize(620, 540)
         self._build_ui()
         self._load_state()
 
@@ -32,16 +32,30 @@ class App(ctk.CTk):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(3, weight=1)   # paste + current-query row expands with height
 
-        # --- Attribute + char limit ---
+        # --- Top: attribute/limit (left) + Swap OUT/IN with Copy (right), compact ---
         top = ctk.CTkFrame(self)
         top.grid(row=0, column=0, padx=12, pady=(12, 6), sticky="ew")
-        top.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(top, text="Attribute:").grid(row=0, column=0, padx=(12, 6), pady=(10, 4), sticky="w")
-        self.attr_entry = ctk.CTkEntry(top)
-        self.attr_entry.grid(row=0, column=1, padx=(0, 12), pady=(10, 4), sticky="ew")
-        ctk.CTkLabel(top, text="Char limit:").grid(row=1, column=0, padx=(12, 6), pady=(4, 10), sticky="w")
-        self.limit_entry = ctk.CTkEntry(top)
-        self.limit_entry.grid(row=1, column=1, padx=(0, 12), pady=(4, 10), sticky="ew")
+        top.grid_columnconfigure(5, weight=1)   # trailing slack keeps fields compact/left
+
+        ctk.CTkLabel(top, text="Attribute:").grid(row=0, column=0, padx=(12, 6), pady=(10, 4), sticky="e")
+        self.attr_entry = ctk.CTkEntry(top, width=130)
+        self.attr_entry.grid(row=0, column=1, padx=(0, 16), pady=(10, 4))
+        ctk.CTkLabel(top, text="Char limit:").grid(row=1, column=0, padx=(12, 6), pady=(4, 10), sticky="e")
+        self.limit_entry = ctk.CTkEntry(top, width=130)
+        self.limit_entry.grid(row=1, column=1, padx=(0, 16), pady=(4, 10))
+
+        ctk.CTkLabel(top, text="Swap OUT").grid(row=0, column=2, padx=(8, 6), pady=(10, 4), sticky="e")
+        self.swap_out_entry = ctk.CTkEntry(top, width=110)
+        self.swap_out_entry.grid(row=0, column=3, padx=(0, 6), pady=(10, 4))
+        ctk.CTkButton(top, text="Copy", width=54,
+                      command=lambda: self._copy_field(self.swap_out_entry, "Swap OUT")).grid(
+            row=0, column=4, padx=(0, 12), pady=(10, 4))
+        ctk.CTkLabel(top, text="Swap IN").grid(row=1, column=2, padx=(8, 6), pady=(4, 10), sticky="e")
+        self.swap_in_entry = ctk.CTkEntry(top, width=110)
+        self.swap_in_entry.grid(row=1, column=3, padx=(0, 6), pady=(4, 10))
+        ctk.CTkButton(top, text="Copy", width=54,
+                      command=lambda: self._copy_field(self.swap_in_entry, "Swap IN")).grid(
+            row=1, column=4, padx=(0, 12), pady=(4, 10))
 
         # --- Overall progress card ---
         card = ctk.CTkFrame(self)
@@ -49,7 +63,7 @@ class App(ctk.CTk):
         card.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(card, text="OVERALL PROGRESS", anchor="w",
                      font=ctk.CTkFont(size=13, weight="bold")).grid(
-            row=0, column=0, columnspan=2, sticky="w", padx=12, pady=(10, 2))
+            row=0, column=0, columnspan=2, sticky="w", padx=12, pady=(8, 2))
         self.progress = ctk.CTkProgressBar(card)
         self.progress.grid(row=1, column=0, sticky="ew", padx=12, pady=4)
         self.progress.set(0)
@@ -59,22 +73,22 @@ class App(ctk.CTk):
         self.totals_lbl.grid(row=2, column=0, columnspan=2, sticky="w", padx=12, pady=(2, 2))
         self.batches_lbl = ctk.CTkLabel(card, text="▶  Batches remaining:  0",
                                         font=ctk.CTkFont(size=15, weight="bold"), anchor="w")
-        self.batches_lbl.grid(row=3, column=0, columnspan=2, sticky="w", padx=12, pady=(2, 10))
+        self.batches_lbl.grid(row=3, column=0, columnspan=2, sticky="w", padx=12, pady=(2, 8))
 
-        # --- Action row: Load list / Next query / Clear ---
+        # --- Action row: compact, centered ---
         actions = ctk.CTkFrame(self, fg_color="transparent")
         actions.grid(row=2, column=0, padx=12, pady=6, sticky="ew")
-        for c in range(3):
-            actions.grid_columnconfigure(c, weight=1)
-        self.load_btn = ctk.CTkButton(actions, text="Load list", height=38, command=self.load_list)
-        self.load_btn.grid(row=0, column=0, padx=4, sticky="ew")
+        actions.grid_columnconfigure(0, weight=1)
+        actions.grid_columnconfigure(4, weight=1)
+        self.load_btn = ctk.CTkButton(actions, text="Load list", width=120, height=36, command=self.load_list)
+        self.load_btn.grid(row=0, column=1, padx=4)
         self._load_fg = self.load_btn.cget("fg_color")
-        self.next_btn = ctk.CTkButton(actions, text="▶ Next query", height=38,
+        self.next_btn = ctk.CTkButton(actions, text="▶ Next query", width=150, height=36,
                                       font=ctk.CTkFont(size=14, weight="bold"), command=self.next_batch)
-        self.next_btn.grid(row=0, column=1, padx=4, sticky="ew")
-        self.clear_btn = ctk.CTkButton(actions, text="Clear", height=38, fg_color="firebrick1",
+        self.next_btn.grid(row=0, column=2, padx=4)
+        self.clear_btn = ctk.CTkButton(actions, text="Clear", width=90, height=36, fg_color="firebrick1",
                                        hover_color="brown1", command=self.clear_all)
-        self.clear_btn.grid(row=0, column=2, padx=4, sticky="ew")
+        self.clear_btn.grid(row=0, column=3, padx=4)
         self._clear_fg = self.clear_btn.cget("fg_color")
 
         # --- Paste column + Current query, side by side ---
@@ -86,36 +100,19 @@ class App(ctk.CTk):
         ctk.CTkLabel(pq, text="PASTE COLUMN", anchor="w",
                      font=ctk.CTkFont(size=12, weight="bold")).grid(
             row=0, column=0, sticky="w", padx=(4, 6), pady=(0, 2))
-        self.paste_box = ctk.CTkTextbox(pq, height=200)
+        self.paste_box = ctk.CTkTextbox(pq, height=170)
         self.paste_box.grid(row=1, column=0, sticky="nsew", padx=(0, 6))
         ctk.CTkLabel(pq, text="CURRENT QUERY", anchor="w",
                      font=ctk.CTkFont(size=12, weight="bold")).grid(
             row=0, column=1, sticky="w", padx=(6, 4), pady=(0, 2))
-        self.query_box = ctk.CTkTextbox(pq, height=200)
+        self.query_box = ctk.CTkTextbox(pq, height=170)
         self.query_box.grid(row=1, column=1, sticky="nsew", padx=(6, 0))
         self.status_lbl = ctk.CTkLabel(pq, text="", anchor="w")
         self.status_lbl.grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=(4, 0))
 
-        # --- Swap OUT / Swap IN scratch fields; LOCK spans both rows beside Copy ---
-        swap = ctk.CTkFrame(self)
-        swap.grid(row=4, column=0, sticky="ew", padx=12, pady=6)
-        swap.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(swap, text="Swap OUT", width=64).grid(row=0, column=0, padx=(12, 6), pady=(10, 4), sticky="w")
-        self.swap_out_entry = ctk.CTkEntry(swap)
-        self.swap_out_entry.grid(row=0, column=1, padx=6, pady=(10, 4), sticky="ew")
-        ctk.CTkButton(swap, text="Copy", width=64,
-                      command=lambda: self._copy_field(self.swap_out_entry, "Swap OUT")).grid(
-            row=0, column=2, padx=(6, 12), pady=(10, 4))
-        ctk.CTkLabel(swap, text="Swap IN", width=64).grid(row=1, column=0, padx=(12, 6), pady=(4, 10), sticky="w")
-        self.swap_in_entry = ctk.CTkEntry(swap)
-        self.swap_in_entry.grid(row=1, column=1, padx=6, pady=(4, 10), sticky="ew")
-        ctk.CTkButton(swap, text="Copy", width=64,
-                      command=lambda: self._copy_field(self.swap_in_entry, "Swap IN")).grid(
-            row=1, column=2, padx=(6, 12), pady=(4, 10))
-
         # --- Footer: stay-on-top + transparency ---
         footer = ctk.CTkFrame(self, fg_color="transparent")
-        footer.grid(row=5, column=0, sticky="ew", padx=12, pady=(4, 12))
+        footer.grid(row=4, column=0, sticky="ew", padx=12, pady=(4, 12))
         footer.grid_columnconfigure(0, weight=1)
         footer.grid_columnconfigure(1, weight=1)
         self.ontop_var = tk.BooleanVar(value=False)
